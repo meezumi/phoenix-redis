@@ -1,0 +1,15 @@
+# Web Framework
+fastapi
+uvicorn[standard]
+
+# Redis
+redis
+arq
+
+# Redis Modules
+redisgraph-py
+numpy # Required by redisai and for our ML features
+
+# Postgres Connector
+psycopg2-binary
+sqlalchemy # Optional, but good practice for future DB interactions

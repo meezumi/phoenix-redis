@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis/redis-stack:latest
+    container_name: phoenix-redis
+    ports:
+      - "6379:6379"
+      - "8001:8001" # RedisInsight GUI
+    volumes:
+      - redis_data:/data
+
+  postgres:
+    image: postgres:16
+    container_name: phoenix-postgres
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: fraud_detection
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: ./backend
+    container_name: phoenix-api
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+      - postgres
+    volumes:
+      - ./backend:/app # Mount local code for live reloading
+
+  worker:
+    build:
+      context: ./backend
+    container_name: phoenix-worker
+    command: arq worker.py AppSettings --watch .
+    depends_on:
+      - redis
+    volumes:
+      - ./backend:/app # Mount local code for live reloading
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: phoenix-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  redis_data:
+  postgres_data:
