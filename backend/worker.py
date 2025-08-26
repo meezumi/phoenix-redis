@@ -1,6 +1,5 @@
 import redis
 import json
-from redis.commands.graph import Graph
 import datetime
 
 # The function that will be executed by the worker.

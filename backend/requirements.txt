@@ -3,11 +3,9 @@ fastapi
 uvicorn[standard]
 
 # Redis
-redis
+redis>=4.2
 arq
 
-# Redis Modules
-redisgraph-py
 numpy # Required by redisai and for our ML features
 
 # Postgres Connector

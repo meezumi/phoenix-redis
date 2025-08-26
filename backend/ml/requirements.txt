@@ -1,4 +1,5 @@
 scikit-learn
 numpy
 skl2onnx
-redis
+redis>=4.2
+packaging
