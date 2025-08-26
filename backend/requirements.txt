@@ -3,7 +3,7 @@ fastapi
 uvicorn[standard]
 
 # Redis
-redis>=4.2
+redis==5.0.4
 arq
 
 numpy # Required by redisai and for our ML features

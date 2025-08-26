@@ -28,7 +28,6 @@ print("Model trained.")
 # --- 2. Convert the Model to ONNX format ---
 initial_type = [("float_input", FloatTensorType([None, 3]))]
 
-# We specify the version for the main ONNX domain ('') and the ML domain.
 target_opset = {"": 13, "ai.onnx.ml": 3}
 
 onnx_model = skl2onnx.convert_sklearn(
@@ -41,7 +40,7 @@ with open(model_path, "wb") as f:
     f.write(onnx_model.SerializeToString())
 print(f"Model converted to ONNX and saved as {model_path}")
 
-# --- 3. Load the ONNX Model into RedisAI ---
+# --- 3. Load the ONNX Model into RedisAI --- (this part still giving errors)
 redis_host = os.getenv("REDIS_HOST", "localhost")
 r = redis.Redis(host=redis_host, port=6379)
 ai = r.ai()
