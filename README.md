@@ -28,3 +28,37 @@ Detecting fraud in a hidden backend process, but also providing human analysts w
 +----------------------------------------------------------------------------------------+
 ```
 
+# Sample Testing Scenario Snippets #
+
+## High Velocity Fraud ##
+```
+curl -X POST -H "Content-Type: application/json" -d '{
+  "user_id": "user-high-velocity",
+  "card_id": "card-hv",
+  "device_id": "device-hv",
+  "amount": 10.00,
+  "merchant": "Gas Station"
+}' http://localhost:8000/transaction
+
+```
+## Fraud Ring ##
+```
+# First, a transaction from a new user on a specific device
+curl -X POST -H "Content-Type: application/json" -d '{
+  "user_id": "user-ring-1",
+  "card_id": "card-ring-1",
+  "device_id": "device-shared-123",
+  "amount": 150.00,
+  "merchant": "Online Store"
+}' http://localhost:8000/transaction
+
+# Second, a transaction from a DIFFERENT user on the SAME device
+curl -X POST -H "Content-Type: application/json" -d '{
+  "user_id": "user-ring-2",
+  "card_id": "card-ring-2",
+  "device_id": "device-shared-123",
+  "amount": 25.50,
+  "merchant": "Coffee Shop"
+}' http://localhost:8000/transaction
+
+```
