@@ -18,7 +18,7 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: fraud_detection
     ports:
-      - "5432:5432"
+      - "5814:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -39,7 +39,7 @@ services:
     build:
       context: ./backend
     container_name: phoenix-worker
-    command: arq worker.py AppSettings --watch .
+    command: arq worker.AppSettings --watch .
     depends_on:
       - redis
     volumes:

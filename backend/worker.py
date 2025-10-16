@@ -1,13 +1,7 @@
-import redis
+import redis.asyncio
 import json
 import datetime
-
-
-# This class is used by the `arq` CLI to configure the worker.
-# It should be at the top or bottom of the file.
-class AppSettings:
-    redis_settings = redis.asyncio.RedisSettings(host="redis")
-    functions = ["run_fraud_checks"]
+from arq.connections import RedisSettings
 
 
 async def run_fraud_checks(ctx, transaction_data: dict):
@@ -16,7 +10,6 @@ async def run_fraud_checks(ctx, transaction_data: dict):
     and publishes alerts to Redis Pub/Sub.
     """
     redis_conn: redis.asyncio.Redis = ctx["redis"]
-    graph = redis_conn.graph("fraud_graph")
 
     print(f"Processing transaction: {transaction_data}")
 
@@ -24,39 +17,23 @@ async def run_fraud_checks(ctx, transaction_data: dict):
     card_id = transaction_data["card_id"]
     device_id = transaction_data["device_id"]
 
-    # --- STAGE 1: MODEL THE TRANSACTION IN THE GRAPH ---
-    await graph.query(f"MERGE (u:User {{id: '{user_id}'}})")
-    await graph.query(f"MERGE (c:Card {{id: '{card_id}'}})")
-    await graph.query(f"MERGE (d:Device {{id: '{device_id}'}})")
-    await graph.query(
-        f"""
-        MATCH (u:User {{id: '{user_id}'}}), (c:Card {{id: '{card_id}'}})
-        MERGE (u)-[:USED_CARD]->(c)
-    """
-    )
-    await graph.query(
-        f"""
-        MATCH (u:User {{id: '{user_id}'}}), (d:Device {{id: '{device_id}'}})
-        MERGE (u)-[:USED_DEVICE]->(d)
-    """
-    )
+    # --- STAGE 1: STORE TRANSACTION DATA IN REDIS ---
+    # Store device usage for fraud ring detection
+    device_users_key = f"device:{device_id}:users"
+    await redis_conn.sadd(device_users_key, user_id)
+    await redis_conn.expire(device_users_key, 3600)  # Keep for 1 hour
 
     is_fraud = False
     fraud_reason = ""
 
-    # --- STAGE 2: QUERY FOR FRAUD RINGS (GRAPH-BASED) ---
-    query = """
-        MATCH (u1:User)-[:USED_DEVICE]->(d:Device)<-[:USED_DEVICE]-(u2:User)
-        WHERE u1.id <> u2.id AND d.id = $device_id
-        RETURN u1.id AS user1, u2.id AS user2, d.id AS shared_device
-    """
-    result = await graph.query(query, {"device_id": device_id})
-
-    if not result.is_empty():
+    # --- STAGE 2: CHECK FOR FRAUD RINGS (DEVICE SHARING) ---
+    # Get all users who have used this device
+    users_on_device = await redis_conn.smembers(device_users_key)
+    users_on_device = [u.decode('utf-8') if isinstance(u, bytes) else u for u in users_on_device]
+    
+    if len(users_on_device) > 1:
         is_fraud = True
-        first_match = result.result_set[0]
-        user1, user2, shared_device = first_match[0], first_match[1], first_match[2]
-        fraud_reason = f"Fraud Ring Detected: Users {user1} and {user2} shared device {shared_device}"
+        fraud_reason = f"Fraud Ring Detected: {len(users_on_device)} different users ({', '.join(users_on_device)}) shared device {device_id}"
         print(f"ALERT: {fraud_reason}")
 
     # --- STAGE 3: CHECK TRANSACTION VELOCITY (RULE-BASED) ---
@@ -85,3 +62,10 @@ async def run_fraud_checks(ctx, transaction_data: dict):
         await redis_conn.publish("fraud_alerts", json.dumps(alert_message))
 
     return f"Transaction for {user_id} processed. Fraud: {is_fraud}"
+
+
+# This class is used by the `arq` CLI to configure the worker.
+# It should be at the top or bottom of the file.
+class AppSettings:
+    redis_settings = RedisSettings(host="redis")
+    functions = [run_fraud_checks]

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import io from 'socket.io-client';
 
 // Define a type for our alert data for type safety
 interface FraudAlert {
@@ -22,36 +21,59 @@ const WS_URL = "ws://localhost:8000/ws";
 
 export default function Home() {
   const [alerts, setAlerts] = useState<FraudAlert[]>([]);
+  const [connectionStatus, setConnectionStatus] = useState<string>('Connecting...');
 
   useEffect(() => {
-    // To make socket.io-client work with FastAPI's ws URL
-    const socket = io(WS_URL.replace('ws://', 'http://'), {
-      transports: ['websocket'],
-    });
+    let ws: WebSocket | null = null;
+    let reconnectTimer: NodeJS.Timeout;
 
-    socket.on('connect', () => {
-      console.log('Successfully connected to WebSocket server!');
-    });
-
-    // FastAPI sends events through the generic 'message' channel
-    socket.on('message', (data: string) => {
-      console.log('Received alert:', data);
+    const connect = () => {
       try {
-        const newAlert: FraudAlert = JSON.parse(data);
-        // Add new alerts to the top of the list for visibility
-        setAlerts(prevAlerts => [newAlert, ...prevAlerts]);
-      } catch (error) {
-        console.error("Failed to parse alert data:", error);
-      }
-    });
+        ws = new WebSocket(WS_URL);
 
-    socket.on('disconnect', () => {
-      console.log('Disconnected from WebSocket server.');
-    });
+        ws.onopen = () => {
+          console.log('Successfully connected to WebSocket server!');
+          setConnectionStatus('Connected');
+        };
+
+        ws.onmessage = (event) => {
+          console.log('Received alert:', event.data);
+          try {
+            const newAlert: FraudAlert = JSON.parse(event.data);
+            // Add new alerts to the top of the list for visibility
+            setAlerts(prevAlerts => [newAlert, ...prevAlerts]);
+          } catch (error) {
+            console.error("Failed to parse alert data:", error);
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error('WebSocket error:', error);
+          setConnectionStatus('Error');
+        };
+
+        ws.onclose = () => {
+          console.log('Disconnected from WebSocket server.');
+          setConnectionStatus('Disconnected - Reconnecting...');
+          // Attempt to reconnect after 3 seconds
+          reconnectTimer = setTimeout(() => {
+            connect();
+          }, 3000);
+        };
+      } catch (error) {
+        console.error('Failed to create WebSocket:', error);
+        setConnectionStatus('Failed to connect');
+      }
+    };
+
+    connect();
 
     // Cleanup function to close the socket when the component unmounts
     return () => {
-      socket.disconnect();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (ws) {
+        ws.close();
+      }
     };
   }, []); // The empty dependency array ensures this runs only once
 
@@ -64,7 +86,12 @@ export default function Home() {
         <div className="bg-gray-800 rounded-lg shadow-xl p-6">
           <div className="flex justify-between items-center mb-4 border-b border-gray-600 pb-2">
             <h2 className="text-xl font-semibold">Incoming Alerts</h2>
-            <span className="text-gray-400">{alerts.length} Total</span>
+            <div className="flex items-center gap-4">
+              <span className={`text-sm ${connectionStatus === 'Connected' ? 'text-green-400' : 'text-yellow-400'}`}>
+                {connectionStatus}
+              </span>
+              <span className="text-gray-400">{alerts.length} Total</span>
+            </div>
           </div>
           <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
             {alerts.length === 0 ? (

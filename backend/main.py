@@ -1,5 +1,5 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from pantic import BaseModel
+from pydantic import BaseModel
 import asyncio
 import redis.asyncio as aioredis
 import json
